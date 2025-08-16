@@ -7,7 +7,7 @@
 body { 
     text-align: center; 
     font-family: sans-serif; 
-    background-image: url('Háttér.png');
+    background-image: url('háttér.png');
     background-size: cover;
     background-repeat: no-repeat; 
     background-position: center center;
@@ -60,12 +60,12 @@ canvas {
 
 <div id="characterMenu" style="display:none;">
   <p>Válassz karaktert:</p>
-  <img src="Karakter1.png" onclick="selectCharacter(1)">
-  <img src="Karakter2.png" onclick="selectCharacter(2)">
-  <img src="Karakter3.png" onclick="selectCharacter(3)">
-  <img src="Karakter4.png" onclick="selectCharacter(4)">
-  <img src="Karakter5.png" onclick="selectCharacter(5)">
-  <img src="Karakter6.png" onclick="selectCharacter(6)">
+  <img src="karakter1.png" onclick="selectCharacter(1)">
+  <img src="karakter2.png" onclick="selectCharacter(2)">
+  <img src="karakter3.png" onclick="selectCharacter(3)">
+  <img src="karakter4.png" onclick="selectCharacter(4)">
+  <img src="karakter5.png" onclick="selectCharacter(5)">
+  <img src="karakter6.png" onclick="selectCharacter(6)">
 </div>
 
 <canvas id="gameCanvas" width="500" height="500"></canvas>
@@ -90,7 +90,7 @@ let ball = null;
 
 // --- LABIRINTUS CUKOR KÉP BETÖLTÉS ---
 const ballImg = new Image();
-ballImg.src = 'Cukor.png';
+ballImg.src = 'cukor.png'; // kisbetű
 
 // --- NEHÉZSÉGI SZINT VÁLASZTÁS ---
 function selectDifficulty(levelMode){
@@ -103,7 +103,7 @@ function selectDifficulty(levelMode){
 function selectCharacter(num){
     selectedCharacterNumber = num;
     selectedCharacter = new Image();
-    selectedCharacter.src = 'Karakter' + num + '.png';
+    selectedCharacter.src = 'karakter' + num + '.png'; // kisbetű
     selectedCharacter.onload = () => {
         player.img = selectedCharacter;
 
@@ -112,7 +112,7 @@ function selectCharacter(num){
         for(let i=1;i<=6;i++){
             if(i !== num){
                 let img = new Image();
-                img.src = 'Karakter' + i + '.png';
+                img.src = 'karakter' + i + '.png';
                 otherChars.push(img);
             }
         }

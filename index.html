@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>Fogd el a cukrot / karakter fogócska!</title>
+<style>
+body { 
+    text-align: center; 
+    font-family: sans-serif; 
+    background-image: url('Háttér.png');
+    background-size: cover;
+    background-repeat: no-repeat; 
+    background-position: center center;
+    margin: 0;
+    min-height: 100vh; 
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#menu, #characterMenu, #restartBtn {
+    margin: 20px;
+    z-index: 10;
+    position: relative;
+}
+
+#characterMenu img {
+    width: 60px;
+    height: 60px;
+    margin: 5px;
+    cursor: pointer;
+    border: 2px solid black;
+    border-radius: 8px;
+}
+
+canvas { 
+    border: 2px solid #000; 
+    background-color: rgba(240,240,240,0.8); 
+    z-index: 1;
+    display: none;
+}
+
+#score, #level {
+    font-size: 20px;
+    font-weight: bold;
+    margin: 10px;
+    color: #000;
+    text-shadow: 1px 1px 2px #fff;
+}
+</style>
+</head>
+<body>
+
+<h1>Fogd el a cukrot!</h1>
+
+<div id="menu">
+  <button onclick="selectDifficulty('easy')">Fogócska</button>
+  <button onclick="selectDifficulty('hard')">Labirintus</button>
+</div>
+
+<div id="characterMenu" style="display:none;">
+  <p>Válassz karaktert:</p>
+  <img src="Karakter1.png" onclick="selectCharacter(1)">
+  <img src="Karakter2.png" onclick="selectCharacter(2)">
+  <img src="Karakter3.png" onclick="selectCharacter(3)">
+  <img src="Karakter4.png" onclick="selectCharacter(4)">
+  <img src="Karakter5.png" onclick="selectCharacter(5)">
+  <img src="Karakter6.png" onclick="selectCharacter(6)">
+</div>
+
+<canvas id="gameCanvas" width="500" height="500"></canvas>
+<p id="score"></p>
+<p id="level"></p>
+<button id="restartBtn" style="display:none;" onclick="restartGame()">Újraindítás</button>
+
+<audio id="beep" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const beep = document.getElementById('beep');
+
+let player = {x:0, y:0, size:40, img:null};
+let movingChar = {x:0, y:0, size:40, img:null, speed:1};
+let score, difficulty, maze, gridSize, level;
+let selectedCharacter = null, selectedCharacterNumber;
+let cellPadding = 4;
+let otherChars = [];
+let ball = null;
+
+// --- LABIRINTUS CUKOR KÉP BETÖLTÉS ---
+const ballImg = new Image();
+ballImg.src = 'Cukor.png';
+
+// --- NEHÉZSÉGI SZINT VÁLASZTÁS ---
+function selectDifficulty(levelMode){
+    difficulty = levelMode;
+    document.getElementById('menu').style.display = 'none';
+    document.getElementById('characterMenu').style.display = 'block';
+}
+
+// --- KARAKTER VÁLASZTÁS ---
+function selectCharacter(num){
+    selectedCharacterNumber = num;
+    selectedCharacter = new Image();
+    selectedCharacter.src = 'Karakter' + num + '.png';
+    selectedCharacter.onload = () => {
+        player.img = selectedCharacter;
+
+        // más karakterek listája a könnyű módhoz
+        otherChars = [];
+        for(let i=1;i<=6;i++){
+            if(i !== num){
+                let img = new Image();
+                img.src = 'Karakter' + i + '.png';
+                otherChars.push(img);
+            }
+        }
+
+        document.getElementById('characterMenu').style.display = 'none';
+        startGame();
+    };
+}
+
+// --- JÁTÉK INDÍTÁS ---
+function startGame() {
+    level = 1;
+    score = 0;
+    gridSize = difficulty==='easy'?10:15;
+    const cellSize = canvas.width / gridSize;
+    player.x = 0; player.y = 0;
+    player.size = cellSize - cellPadding*2;
+
+    // labirintus generálása minden indításnál
+    if(difficulty==='hard') generateMazeDFS();
+    else maze = Array.from({length:gridSize},()=>Array(gridSize).fill(0));
+
+    if(difficulty==='easy') spawnMovingChar();
+    else placeBall();
+
+    canvas.style.display = 'block';
+    document.getElementById('restartBtn').style.display = 'inline-block';
+    updateLevelScore();
+    gameLoop();
+}
+
+// --- ÚJRAINDÍTÁS ---
+function restartGame() {
+    startGame();
+}
+
+function updateLevelScore() {
+    document.getElementById('score').innerText = 'Pontszám: ' + score;
+    document.getElementById('level').innerText = 'Szint: ' + level;
+}
+
+// --- KÖNNYŰ MÓD: MOZGÓ ELLENSÉG KÖVETI A JÁTÉKOST ---
+function spawnMovingChar() {
+    const cellSize = canvas.width / gridSize;
+    const freeCells = [];
+    for(let i=0;i<gridSize;i++){
+        for(let j=0;j<gridSize;j++){
+            freeCells.push({x:i,y:j});
+        }
+    }
+    const cell = freeCells[Math.floor(Math.random()*freeCells.length)];
+    movingChar.x = cell.x * cellSize;
+    movingChar.y = cell.y * cellSize;
+    movingChar.size = cellSize - cellPadding*2;
+    movingChar.img = otherChars[Math.floor(Math.random()*otherChars.length)];
+    movingChar.speed = 1; // lassú mozgás pixel/frame
+}
+
+function updateMovingChar() {
+    const cellSize = canvas.width / gridSize;
+    if(!movingChar) return;
+
+    // távolság a játékostól
+    let dx = player.x - movingChar.x;
+    let dy = player.y - movingChar.y;
+    let dist = Math.sqrt(dx*dx + dy*dy);
+
+    // lassú mozgás felé
+    if(dist > 0) {
+        movingChar.x += movingChar.speed * dx/dist;
+        movingChar.y += movingChar.speed * dy/dist;
+    }
+
+    // ütközés a játékossal (elkapás)
+    if(dist < cellSize/2){
+        score++;
+        beep.play();
+        updateLevelScore();
+        spawnMovingChar(); // új pozíció
+    }
+}
+
+// --- NEHÉZ MÓD: LABIRINTUS GENERÁLÁS ---
+function generateMazeDFS() {
+    maze = Array.from({length:gridSize},()=>Array(gridSize).fill(1));
+    function shuffle(arr){for(let i=arr.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr;}
+    function carve(x,y){
+        maze[x][y]=0;
+        let dirs = shuffle([[1,0],[-1,0],[0,1],[0,-1]]);
+        dirs.forEach(d=>{
+            let nx = x + d[0]*2;
+            let ny = y + d[1]*2;
+            if(nx>=0 && nx<gridSize && ny>=0 && ny<gridSize && maze[nx][ny]===1){
+                maze[x+d[0]][y+d[1]]=0;
+                carve(nx,ny);
+            }
+        });
+    }
+    carve(0,0);
+}
+
+function placeBall() {
+    const cellSize = canvas.width / gridSize;
+    const freeCells = [];
+    for(let i=0;i<gridSize;i++){
+        for(let j=0;j<gridSize;j++){
+            if(maze[i][j]===0 && !(i===Math.round(player.x/cellSize) && j===Math.round(player.y/cellSize)))
+                freeCells.push({x:i,y:j});
+        }
+    }
+    if(freeCells.length===0) return;
+    const cell = freeCells[Math.floor(Math.random()*freeCells.length)];
+    ball = {x:cell.x, y:cell.y, size: cellSize - cellPadding*2};
+}
+
+// --- BILLENTYŰZET ---
+document.addEventListener('keydown', e=>{
+    const cellSize = canvas.width / gridSize;
+    let gx = Math.round(player.x / cellSize);
+    let gy = Math.round(player.y / cellSize);
+    if(e.key==='ArrowUp' && gy>0 && maze[gx][gy-1]===0) player.y -= cellSize;
+    if(e.key==='ArrowDown' && gy<gridSize-1 && maze[gx][gy+1]===0) player.y += cellSize;
+    if(e.key==='ArrowLeft' && gx>0 && maze[gx-1][gy]===0) player.x -= cellSize;
+    if(e.key==='ArrowRight' && gx<gridSize-1 && maze[gx+1][gy]===0) player.x += cellSize;
+
+    // labirintus cukor elkapás
+    if(difficulty==='hard' && ball && Math.round(player.x/cellSize)===ball.x && Math.round(player.y/cellSize)===ball.y){
+        score++;
+        beep.play();
+        updateLevelScore();
+        placeBall();
+        generateMazeDFS(); // új labirintus minden elkapás után
+    }
+});
+
+// --- RAJZOLÁS ---
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const cellSize = canvas.width / gridSize;
+
+    if(difficulty==='hard'){
+        for(let i=0;i<gridSize;i++){
+            for(let j=0;j<gridSize;j++){
+                if(maze[i][j]===1){
+                    ctx.fillStyle='pink'; 
+                    ctx.fillRect(i*cellSize,j*cellSize,cellSize,cellSize);
+                }
+            }
+        }
+        if(ball && ballImg.complete){
+            ctx.drawImage(ballImg, ball.x*cellSize+cellPadding, ball.y*cellSize+cellPadding, ball.size, ball.size);
+        }
+    }
+
+    if(player.img && player.img.complete){
+        ctx.drawImage(player.img, player.x+cellPadding, player.y+cellPadding, player.size, player.size);
+    }
+
+    if(difficulty==='easy' && movingChar.img && movingChar.img.complete){
+        ctx.drawImage(movingChar.img, movingChar.x+cellPadding, movingChar.y+cellPadding, movingChar.size, movingChar.size);
+    }
+}
+
+// --- JÁTÉK LOOP ---
+function gameLoop(){
+    draw();
+    if(difficulty==='easy') updateMovingChar();
+    requestAnimationFrame(gameLoop);
+}
+</script>
+
+</body>
+</html>

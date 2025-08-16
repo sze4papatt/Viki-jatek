@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<title>Fogd el a labdát! Szintlépéssel</title>
+<style>
+  body { text-align: center; font-family: sans-serif; background-color: #fff; }
+  canvas { border: 2px solid #000; display: block; margin: 20px auto; background-color: #f0f0f0; }
+  #menu button, #restartBtn { margin: 10px; padding: 10px 20px; font-size: 16px; }
+</style>
+</head>
+<body>
+
+<h1>Kapd el a cukrot!</h1>
+
+<div id="menu">
+  <button onclick="startGame('easy')">Könnyű</button>
+  <button onclick="startGame('hard')">Nehéz</button>
+</div>
+
+<canvas id="gameCanvas" width="500" height="500" style="display:none;"></canvas>
+<p id="score"></p>
+<p id="level"></p>
+<button id="restartBtn" style="display:none;" onclick="restartGame()">Újraindítás</button>
+
+<audio id="beep" src="https://actions.google.com/sounds/v1/cartoon/clang_and_wobble.ogg"></audio>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const beep = document.getElementById('beep');
+const restartBtn = document.getElementById('restartBtn');
+
+let player, ball, score, difficulty, maze, gridSize, level;
+let pointsToNextLevel = 3;
+let cellPadding = 4; // kék kocka kisebb lesz, hogy ne lógjon rá a falra
+
+function startGame(levelMode) {
+    difficulty = levelMode;
+    level = 1;
+    score = 0;
+    gridSize = difficulty==='easy'?10:15;
+    const cellSize = canvas.width / gridSize;
+    player = {x:0, y:0, size: cellSize - cellPadding*2};
+    
+    document.getElementById('menu').style.display = 'none';
+    restartBtn.style.display = 'inline-block';
+    canvas.style.display = 'block';
+    updateLevelScore();
+    
+    if(difficulty==='hard') generateMazeDFS();
+    else maze = Array.from({length:gridSize},()=>Array(gridSize).fill(0));
+    
+    placeBall();
+    draw();
+}
+
+function restartGame() {
+    startGame(difficulty);
+}
+
+function updateLevelScore() {
+    document.getElementById('score').innerText = 'Pontszám: ' + score;
+    document.getElementById('level').innerText = 'Szint: ' + level;
+}
+
+// Labda elhelyezése
+function placeBall() {
+    let freeCells = [];
+    for(let i=0;i<gridSize;i++){
+        for(let j=0;j<gridSize;j++){
+            if(maze[i][j]===0 && !(i===player.x/(canvas.width/gridSize) && j===player.y/(canvas.width/gridSize))) freeCells.push({x:i,y:j});
+        }
+    }
+    const cell = freeCells[Math.floor(Math.random()*freeCells.length)];
+    const cellSize = canvas.width / gridSize;
+    ball = {x:cell.x, y:cell.y, size: cellSize - cellPadding*2};
+}
+
+// DFS labirintus
+function generateMazeDFS() {
+    maze = Array.from({length:gridSize},()=>Array(gridSize).fill(1));
+    function shuffle(arr){for(let i=arr.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]];} return arr;}
+    function carve(x,y){
+        maze[x][y]=0;
+        let dirs = shuffle([[1,0],[-1,0],[0,1],[0,-1]]);
+        dirs.forEach(d=>{
+            let nx = x + d[0]*2;
+            let ny = y + d[1]*2;
+            if(nx>=0 && nx<gridSize && ny>=0 && ny<gridSize && maze[nx][ny]===1){
+                maze[x+d[0]][y+d[1]]=0;
+                carve(nx,ny);
+            }
+        });
+    }
+    carve(0,0);
+}
+
+// Rajzolás
+function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const cellSize = canvas.width / gridSize;
+    ctx.fillStyle='black';
+    for(let i=0;i<gridSize;i++){
+        for(let j=0;j<gridSize;j++){
+            if(maze[i][j]===1) ctx.fillRect(i*cellSize,j*cellSize,cellSize,cellSize);
+        }
+    }
+    ctx.fillStyle='blue';
+    ctx.fillRect(player.x + cellPadding, player.y + cellPadding, player.size, player.size);
+    
+    ctx.fillStyle='red';
+    ctx.fillRect(ball.x*cellSize + cellPadding, ball.y*cellSize + cellPadding, ball.size, ball.size);
+    
+    updateLevelScore();
+}
+
+function collides(x,y){return maze[x][y]===1;}
+
+document.addEventListener('keydown', e=>{
+    if(!canvas.style.display || canvas.style.display==='none') return;
+    let cellSize = canvas.width / gridSize;
+    let newX = player.x / cellSize;
+    let newY = player.y / cellSize;
+
+    if(e.key==='ArrowLeft') newX--;
+    if(e.key==='ArrowRight') newX++;
+    if(e.key==='ArrowUp') newY--;
+    if(e.key==='ArrowDown') newY++;
+
+    if(newX>=0 && newX<gridSize && newY>=0 && newY<gridSize && !collides(newX,newY)){
+        player.x = newX*cellSize;
+        player.y = newY*cellSize;
+    }
+
+    if(player.x === ball.x*cellSize && player.y === ball.y*cellSize){
+        score++;
+        beep.play();
+        checkLevelUp();
+        showWin();
+    }
+
+    draw();
+});
+
+function showWin() {
+    let blinkCount=0;
+    const blinkSpeed = Math.max(100,300 - level*30);
+    const interval=setInterval(()=>{
+        canvas.style.backgroundColor = canvas.style.backgroundColor==='yellow'?'#f0f0f0':'yellow';
+        blinkCount++;
+        if(blinkCount>5){clearInterval(interval); canvas.style.backgroundColor='#f0f0f0';}
+    },blinkSpeed);
+
+    if(difficulty==='hard') generateMazeDFS();
+    placeBall();
+    draw();
+}
+
+function checkLevelUp() {
+    if(score % pointsToNextLevel === 0){
+        level++;
+        gridSize = Math.min(25, gridSize + 2);
+        const cellSize = canvas.width / gridSize;
+        player.size = cellSize - cellPadding*2;
+        if(difficulty==='hard') generateMazeDFS();
+    }
+}
+</script>
+</body>
+</html>
